@@ -16,6 +16,6 @@ defmodule ScimPathParser do
     #  "ATTRNAME",
     #  "subAttr",
     #],
-    parse: :scim_path,
+    parse: :scim_rfc_path,
   ]
 end

@@ -33,9 +33,11 @@ nameChar  = "-" / "_" / DIGIT / ALPHA
 subAttr   = "." ATTRNAME
 	  ; a sub-attribute of a complex attribute
 
+;;
+scim-rfc-path = attrPath / valuePath [subAttr]
 
-;; additional targets
-scim-path = attrPath / (attrPath "[" valFilter "]" / attrPath) *1subAttr
+;; custom additional targets
+my-scim-path = attrPath / (attrPath "[" valFilter "]" / attrPath) *1subAttr
 
 
 

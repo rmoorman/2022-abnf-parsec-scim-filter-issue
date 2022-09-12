@@ -1,21 +1,10 @@
-# ScimFilterAbnfParser
+# Scim Filter ABNF Parser issue repository
 
-**TODO: Add description**
+Holds attempts to construct a working SCIM ABNF parser based on `abnf_parsec`
+and the ABNF definitions found in:
 
-## Installation
-
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `scim_filter_abnf_parser` to your list of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:scim_filter_abnf_parser, "~> 0.1.0"}
-  ]
-end
-```
-
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/scim_filter_abnf_parser>.
-
+* <https://www.rfc-editor.org/rfc/rfc7644#section-4> ABNF
+* <https://www.rfc-editor.org/rfc/rfc7644#page-34> path ABNF
+* <https://www.rfc-editor.org/rfc/rfc3986#appendix-A> URI ABNF
+* <https://www.rfc-editor.org/rfc/rfc5234#appendix-B.1> core ABNF
+* <https://trac.ietf.org/trac/json/browser/abnf/json.abnf?rev=2> json ABNF
