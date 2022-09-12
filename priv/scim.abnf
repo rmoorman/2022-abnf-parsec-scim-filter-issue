@@ -2,27 +2,29 @@
 ; https://www.rfc-editor.org/rfc/rfc7644#section-4
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-FILTER    = attrExp / logExp / valuePath / *1"not" "(" FILTER ")"
+FILTER    = (attrExp / valuePath / [NOT SP] "(" FILTER ")") [SP AND-OR SP FILTER]
 
 valuePath = attrPath "[" valFilter "]"
             ; FILTER uses sub-attributes of a parent attrPath
 
-valFilter = attrExp / logExp / *1"not" "(" valFilter ")"
+valFilter = (attrExp / [NOT SP] "(" valFilter ")") [SP AND-OR SP valFilter]
 
 attrExp   = (attrPath SP "pr") /
             (attrPath SP compareOp SP compValue)
 
-logExp    = FILTER SP ("and" / "or") SP FILTER
-
 compValue = false / null / true / number / string
 	  ; rules from JSON (RFC 7159)
+
+NOT = "not"
+
+AND-OR = "and" / "or"
 
 compareOp = "eq" / "ne" / "co" /
 		 "sw" / "ew" /
 		 "gt" / "lt" /
 		 "ge" / "le"
 
-attrPath  = [URI ":"] ATTRNAME *1subAttr
+attrPath  = (URI / ATTRNAME) *1subAttr
 	  ; SCIM attribute name
 	  ; URI is SCIM "schema" URI
 
@@ -34,7 +36,7 @@ subAttr   = "." ATTRNAME
 	  ; a sub-attribute of a complex attribute
 
 ;;
-scim-rfc-path = attrPath / valuePath [subAttr]
+scim-rfc-path = valuePath [subAttr] / attrPath
 
 ;; custom additional targets
 my-scim-path = attrPath / (attrPath "[" valFilter "]" / attrPath) *1subAttr
