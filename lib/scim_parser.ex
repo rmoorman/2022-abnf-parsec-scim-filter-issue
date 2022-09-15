@@ -7,7 +7,7 @@ defmodule ScimParser do
       "ATTRNAME" => {:reduce, {List, :to_string, []}},
       "string" => {:reduce, {List, :to_string, []}},
       "NOT" => {:reduce, {List, :to_string, []}},
-      "AND-OR" => {:reduce, {List, :to_string, []}},
+      "AND-OR" => {:reduce, {List, :to_string, []}}
       #
     },
     ignore: [
@@ -24,6 +24,6 @@ defmodule ScimParser do
       "subAttr",
       #
       "unreserved",
-      "pchar",
+      "pchar"
     ]
 end
