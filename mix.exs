@@ -6,6 +6,7 @@ defmodule ScimFilterAbnfParser.MixProject do
       app: :scim_filter_abnf_parser,
       version: "0.1.0",
       elixir: "~> 1.13",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -27,4 +28,8 @@ defmodule ScimFilterAbnfParser.MixProject do
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
     ]
   end
+
+  # Specifies which paths to compile per environment.
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 end

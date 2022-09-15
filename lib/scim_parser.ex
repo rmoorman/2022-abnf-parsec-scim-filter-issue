@@ -7,7 +7,8 @@ defmodule ScimParser do
       "ATTRNAME" => {:reduce, {List, :to_string, []}},
       "string" => {:reduce, {List, :to_string, []}},
       "NOT" => {:reduce, {List, :to_string, []}},
-      "AND-OR" => {:reduce, {List, :to_string, []}}
+      "AND-OR" => {:reduce, {List, :to_string, []}},
+      #
     },
     ignore: [
       "quotation-mark"
@@ -20,6 +21,9 @@ defmodule ScimParser do
       "unescaped",
       "string",
       "ATTRNAME",
-      "subAttr"
+      "subAttr",
+      #
+      "unreserved",
+      "pchar",
     ]
 end
