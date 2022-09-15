@@ -2,11 +2,25 @@
 ; https://www.rfc-editor.org/rfc/rfc7644#section-4
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; Custom `FILTER` definition
+; @princemaple notes that there is a missing space in `not (...)`.
+; Furthermore, the original definition leads to infinite recursion in the
+; generated parser.
+; Hence a custom `FILTER`, `valFilter` and supporting `NOT` and `AND-OR`
+; definitions are introduced.
+;
+; original:
+;   FILTER    = attrExp / logExp / valuePath / *1"not" "(" FILTER ")"
+;
 FILTER    = (attrExp / valuePath / [NOT SP] "(" FILTER ")") [SP AND-OR SP FILTER]
 
 valuePath = attrPath "[" valFilter "]"
             ; FILTER uses sub-attributes of a parent attrPath
 
+; Custom `valFilter`
+; original:
+;   attrExp / logExp / *1"not" "(" valFilter ")"
+;
 valFilter = (attrExp / [NOT SP] "(" valFilter ")") [SP AND-OR SP valFilter]
 
 attrExp   = (attrPath SP "pr") /
@@ -15,8 +29,9 @@ attrExp   = (attrPath SP "pr") /
 compValue = false / null / true / number / string
 	  ; rules from JSON (RFC 7159)
 
+; Custom `NOT` and `AND-OR` definitions for better customization
+; (to support custom `valFilter` and `FILTER` definitions)
 NOT = "not"
-
 AND-OR = "and" / "or"
 
 compareOp = "eq" / "ne" / "co" /
@@ -24,6 +39,17 @@ compareOp = "eq" / "ne" / "co" /
 		 "gt" / "lt" /
 		 "ge" / "le"
 
+; custom `attrPath`
+; @princemaple noted that:
+;
+; 1. the URI definition is super flexible (`a:::::` is a valid URI)
+; 2. generated parser is greedy and does not perform backtracking
+; `uri:a:b:c will be completely matched by `URI` and there will be nothing left for `ATTRNAME`, hence failing the `attrPath`
+; So an adjusted definition is used for `attrPath` (a hack)
+;
+; originally:
+;   attrPath  = [URI ":"] ATTRNAME *1subAttr
+;
 attrPath  = (URI / ATTRNAME) *1subAttr
 	  ; SCIM attribute name
 	  ; URI is SCIM "schema" URI
@@ -35,12 +61,23 @@ nameChar  = "-" / "_" / DIGIT / ALPHA
 subAttr   = "." ATTRNAME
 	  ; a sub-attribute of a complex attribute
 
-;;
+
+
+
+; SCIM path
+; https://www.rfc-editor.org/rfc/rfc7644.html#page-34
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; @princemaple notes that because of lack of backtracking in the parser, we
+; need the longest matching sequence go first, Otherwise `attrPath` always
+; matches the prefix of `valuePath` and the `valuePath` branch is never
+; reached.
+; So we use an adjusted version here
+;
+; originally:
+;   scim-rfc-path = attrPath / valuePath [subAttr]
+;
 scim-rfc-path = valuePath [subAttr] / attrPath
-
-;; custom additional targets
-my-scim-path = attrPath / (attrPath "[" valFilter "]" / attrPath) *1subAttr
-
 
 
 
