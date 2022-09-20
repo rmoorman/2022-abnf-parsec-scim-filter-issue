@@ -2,21 +2,56 @@
 ; https://www.rfc-editor.org/rfc/rfc7644#section-4
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; Custom `FILTER` definition
+; @princemaple notes that there is a missing space in `not (...)`.
+; Furthermore, the original definition leads to infinite recursion in the
+; generated parser.
+; Hence a custom `FILTER`, `valFilter` and supporting `NOT` and `AND-OR`
+; definitions are introduced.
+;
+; original:
+;   FILTER    = attrExp / logExp / valuePath / *1"not" "(" FILTER ")"
+;
 FILTER    = (attrExp / valuePath / [NOT SP] "(" FILTER ")") [SP AND-OR SP FILTER]
 
 valuePath = attrPath "[" valFilter "]"
             ; FILTER uses sub-attributes of a parent attrPath
 
+; Custom `valFilter`
+; original:
+;   attrExp / logExp / *1"not" "(" valFilter ")"
+;
 valFilter = (attrExp / [NOT SP] "(" valFilter ")") [SP AND-OR SP valFilter]
 
 attrExp   = (attrPath SP "pr") /
             (attrPath SP compareOp SP compValue)
 
-compValue = false / null / true / number / string
-	  ; rules from JSON (RFC 7159)
+; Custom `compValue`
+;
+; Even though the spec mentions
+;
+; `(meta.resourceType eq User) or (meta.resourceType eq Group)`
+;
+; as a filter expression (https://www.rfc-editor.org/rfc/rfc7644#page-17)
+; that can be used to restrict resource types, it does not fit the original ABNF
+; definition as the matching value (`User` or `Group` in the example)
+; needs to be a valid json string (i.e. quoted)
+;
+; So we adjust the definition of `compValue` slightly to also allow for
+; keywords (unquoted sequences of characters).
+; This allows us to extract the `User` and `Group` from the aforementioned expression
+; for mentioned resource type comparison.
+;
+; original:
+;   compValue = false / null / true / number / string
+;             ; rules from JSON (RFC 7159)
+;
+compValue = false / null / true / number / string / compKeyword
+compKeyword = ALPHA *(nameChar)
 
+; Custom `NOT` and `AND-OR` definitions for better customization
+; (to support custom `valFilter` and `FILTER` definitions)
 NOT = "not"
-
 AND-OR = "and" / "or"
 
 compareOp = "eq" / "ne" / "co" /
@@ -24,9 +59,25 @@ compareOp = "eq" / "ne" / "co" /
 		 "gt" / "lt" /
 		 "ge" / "le"
 
-attrPath  = (URI / ATTRNAME) *1subAttr
-	  ; SCIM attribute name
-	  ; URI is SCIM "schema" URI
+; custom `attrPath`
+; @princemaple noted that:
+;
+; 1. the URI definition is super flexible (`a:::::` is a valid URI)
+; 2. generated parser is greedy and does not perform backtracking
+; `uri:a:b:c will be completely matched by `URI` and there will be nothing left for `ATTRNAME`, hence failing the `attrPath`
+; So an adjusted definition is used for `attrPath`
+;
+; originally:
+;   attrPath  = [URI ":"] ATTRNAME *1subAttr
+;
+; adjusted but not optimal:
+;   attrPath  = (URI / ATTRNAME) *1subAttr
+;	        ; SCIM attribute name
+;	        ; URI is SCIM "schema" URI
+attrPath = [schema-uri] ATTRNAME *1subAttr
+schema-uri = *(1*schema-uri-part schema-uri-sep)
+schema-uri-part = ALPHA / DIGIT / "." / "-" / "_"
+schema-uri-sep = %x3A
 
 ATTRNAME  = ALPHA *(nameChar)
 
@@ -35,12 +86,23 @@ nameChar  = "-" / "_" / DIGIT / ALPHA
 subAttr   = "." ATTRNAME
 	  ; a sub-attribute of a complex attribute
 
-;;
+
+
+
+; SCIM path
+; https://www.rfc-editor.org/rfc/rfc7644.html#page-34
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; @princemaple notes that because of lack of backtracking in the parser, we
+; need the longest matching sequence go first, Otherwise `attrPath` always
+; matches the prefix of `valuePath` and the `valuePath` branch is never
+; reached.
+; So we use an adjusted version here
+;
+; originally:
+;   scim-rfc-path = attrPath / valuePath [subAttr]
+;
 scim-rfc-path = valuePath [subAttr] / attrPath
-
-;; custom additional targets
-my-scim-path = attrPath / (attrPath "[" valFilter "]" / attrPath) *1subAttr
-
 
 
 

@@ -1,5 +1,5 @@
 defmodule ScimParserTest do
-  use ExUnit.Case
+  use ParserCase, async: true
 
   @filter_rules [
     # filter rules (from spec)
@@ -22,7 +22,7 @@ defmodule ScimParserTest do
     ~s|userType eq "Employee" and (emails.type eq "work")|,
     ~s|userType eq "Employee" and emails[type eq "work" and value co "@example.com"]|,
     ~s|emails[type eq "work" and value co "@example.com"] or ims[type eq "xmpp" and value co "@foo.com"]|,
-    ## filter rules (elsewhere, made up, intentionally different)
+    # filter rules (elsewhere, made up, intentionally different)
     ~s|userType eq "Employee" and (emails co "example.com" or emails co "example.org")|,
     ~s|urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber pr|
   ]
@@ -30,9 +30,7 @@ defmodule ScimParserTest do
   @tag :filter
   for rule <- @filter_rules do
     test "filter rule ~s|#{rule}|" do
-      task = Task.async(fn -> ScimParser.filter(unquote(rule)) end)
-      assert {:ok, result} = Task.yield(task, 2000) || Task.shutdown(task)
-      assert {:ok, _result, "" = _rest, _, _, _} = result
+      assert {:ok, _result, "" = _rest, _, _, _} = parse(:filter, unquote(rule))
     end
   end
 
@@ -54,9 +52,166 @@ defmodule ScimParserTest do
   @tag :path
   for rule <- @path_rules do
     test "path rule ~s|#{rule}|" do
-      task = Task.async(fn -> ScimParser.scim_rfc_path(unquote(rule)) end)
-      assert {:ok, result} = Task.yield(task, 200) || Task.shutdown(task)
-      assert {:ok, _result, "" = _rest, _, _, _} = result
+      assert {:ok, _result, "" = _rest, _, _, _} = parse(:scim_rfc_path, unquote(rule))
+    end
+  end
+
+  describe "result of parsing an invalid rule" do
+    @rule ~s|urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber|
+    test "~s|#{@rule}| used as a filter causes an error" do
+      rule = @rule
+
+      assert {
+               :error,
+               "expected attrexp or valuepath or not, followed by core_sp or nothing, followed by string \"(\", followed by filter, followed by string \")\"",
+               ^rule,
+               _,
+               _,
+               _
+             } = parse(:filter, @rule)
+    end
+
+    @rule ~s|adresses[foo]|
+    test "~s|#{@rule}| has unparsed rest" do
+      assert {:ok, _, "[foo]", _, _, _} = parse(:scim_rfc_path, @rule)
+    end
+
+    @rule ~s|adresses[zip sw "1234"|
+    test "~s|#{@rule}| has unparsed rest" do
+      assert {:ok, _, ~s|[zip sw "1234"|, _, _, _} = parse(:scim_rfc_path, @rule)
+    end
+  end
+
+  describe "result of parsing a valid rule" do
+    @rule ~s|userName Eq "john"|
+    test "~s|#{@rule}|" do
+      expected = [
+        filter: [
+          attrexp: [
+            attrpath: [
+              schema_uri: "",
+              attrname: "userName"
+            ],
+            compareop: "eq",
+            compvalue: "john"
+          ]
+        ]
+      ]
+
+      assert {:ok, ^expected, "", _, _, _} = parse(:filter, @rule)
+    end
+
+    @rule ~s|name.familyName co "O'Malley"|
+    test "~s|#{@rule}|" do
+      expected = [
+        filter: [
+          attrexp: [
+            attrpath: [
+              schema_uri: "",
+              attrname: "name",
+              subattr: "familyName"
+            ],
+            compareop: "co",
+            compvalue: "O'Malley"
+          ]
+        ]
+      ]
+
+      assert {:ok, ^expected, "", _, _, _} = parse(:filter, @rule)
+    end
+
+    @rule ~s|urn:ietf:params:scim:schemas:core:2.0:User:userName sw "J"|
+    test "~s|#{@rule}|" do
+      expected = [
+        filter: [
+          attrexp: [
+            attrpath: [
+              schema_uri: "urn:ietf:params:scim:schemas:core:2.0:User",
+              attrname: "userName"
+            ],
+            compareop: "sw",
+            compvalue: "J"
+          ]
+        ]
+      ]
+
+      assert {:ok, ^expected, "", _, _, _} = parse(:filter, @rule)
+    end
+
+    @rule ~s|id eq 1|
+    test "~s|#{@rule}|" do
+      assert {:ok, data, "", _, _, _} = parse(:filter, @rule)
+      assert [filter: [attrexp: [_, _, compvalue: %Decimal{coef: 1, exp: 0, sign: 1}]]] = data
+    end
+
+    @rule ~s|id eq 1.4|
+    test "~s|#{@rule}|" do
+      assert {:ok, data, "", _, _, _} = parse(:filter, @rule)
+
+      assert [filter: [attrexp: [_, _, compvalue: %Decimal{coef: 14, exp: -1, sign: 1}]]] = data
+    end
+
+    @rule ~s|id eq -1.4|
+    test "~s|#{@rule}|" do
+      assert {:ok, data, "", _, _, _} = parse(:filter, @rule)
+
+      assert [filter: [attrexp: [_, _, compvalue: %Decimal{coef: 14, sign: -1, exp: -1}]]] = data
+    end
+
+    @rule ~s|(meta.resourceType eq User) or (meta.resourceType eq Group)|
+    test "~s|#{@rule}| does not cause an error (even though spec's ABNF doesn't allow it)" do
+      expected = [
+        filter: [
+          filter: [
+            attrexp: [
+              attrpath: [schema_uri: "", attrname: "meta", subattr: "resourceType"],
+              compareop: "eq",
+              compvalue: {:compkeyword, 'User'}
+            ]
+          ],
+          and_or: "or",
+          filter: [
+            filter: [
+              attrexp: [
+                attrpath: [schema_uri: "", attrname: "meta", subattr: "resourceType"],
+                compareop: "eq",
+                compvalue: {:compkeyword, 'Group'}
+              ]
+            ]
+          ]
+        ]
+      ]
+
+      assert {:ok, ^expected, "", _, _, _} = parse(:filter, @rule)
+    end
+
+    @rule ~s|not (meta.resourceType eq User) and not (meta.resourceType eq Group)|
+    test "~s|#{@rule}| does not cause an error (even though spec's ABNF doesn't allow it)" do
+      expected = [
+        filter: [
+          not: "not",
+          filter: [
+            attrexp: [
+              attrpath: [schema_uri: "", attrname: "meta", subattr: "resourceType"],
+              compareop: "eq",
+              compvalue: {:compkeyword, 'User'}
+            ]
+          ],
+          and_or: "and",
+          filter: [
+            not: "not",
+            filter: [
+              attrexp: [
+                attrpath: [schema_uri: "", attrname: "meta", subattr: "resourceType"],
+                compareop: "eq",
+                compvalue: {:compkeyword, 'Group'}
+              ]
+            ]
+          ]
+        ]
+      ]
+
+      assert {:ok, ^expected, "", _, _, _} = parse(:filter, @rule)
     end
   end
 end
