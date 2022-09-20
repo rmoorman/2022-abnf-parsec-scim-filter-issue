@@ -1,4 +1,10 @@
-; SCIM Filter ABNF definition
+; Entry point definitions
+;;;;;;;;;;;;;;;;;;;;;;;;;
+scim-filter = FILTER
+scim-path = scim-rfc-path
+
+
+; SCIM Filter ABNF definition (with adjustments)
 ; https://www.rfc-editor.org/rfc/rfc7644#section-4
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -9,22 +15,29 @@
 ; Hence a custom `FILTER`, `valFilter` and supporting `NOT` and `AND-OR`
 ; definitions are introduced.
 ;
+; Furthermore we use a custom whitespace definition that includes newlines and
+; tabs in order to allow for multiline definitions as well as a grouping
+; definition for easier processing.
+;
 ; original:
 ;   FILTER    = attrExp / logExp / valuePath / *1"not" "(" FILTER ")"
 ;
-FILTER    = (attrExp / valuePath / [NOT SP] "(" FILTER ")") [SP AND-OR SP FILTER]
+FILTER    = *ws (attrExp / valuePath / [NOT ws] filter-grouping) [ws AND-OR ws FILTER] *ws
+filter-grouping = grouping-start FILTER grouping-end
 
-valuePath = attrPath "[" valFilter "]"
+valuePath = attrPath attribute-filter-start valFilter attribute-filter-end
             ; FILTER uses sub-attributes of a parent attrPath
 
 ; Custom `valFilter`
+;
 ; original:
 ;   attrExp / logExp / *1"not" "(" valFilter ")"
 ;
-valFilter = (attrExp / [NOT SP] "(" valFilter ")") [SP AND-OR SP valFilter]
+valFilter = (attrExp / [NOT ws] valFilter-grouping) [ws AND-OR ws valFilter]
+valFilter-grouping = grouping-start valFilter grouping-end
 
-attrExp   = (attrPath SP "pr") /
-            (attrPath SP compareOp SP compValue)
+attrExp   = (attrPath ws presentOp) /
+            (attrPath ws compareOp ws compValue)
 
 ; Custom `compValue`
 ;
@@ -48,6 +61,9 @@ attrExp   = (attrPath SP "pr") /
 ;
 compValue = false / null / true / number / string / compKeyword
 compKeyword = ALPHA *(nameChar)
+
+; Custom alias `presentOp` for the "pr" op used in `attrExp`
+presentOp = "pr"
 
 ; Custom `NOT` and `AND-OR` definitions for better customization
 ; (to support custom `valFilter` and `FILTER` definitions)
@@ -103,6 +119,27 @@ subAttr   = "." ATTRNAME
 ;   scim-rfc-path = attrPath / valuePath [subAttr]
 ;
 scim-rfc-path = valuePath [subAttr] / attrPath
+
+
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; UTILS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+grouping-start = "("
+grouping-end = ")"
+attribute-filter-start = "["
+attribute-filter-end = "]"
+
+
+; whitespace (\n \r space or tab)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ws = 1*(LF / CR / SP / HTAB)
+
 
 
 

@@ -9,42 +9,47 @@ defmodule ScimParser do
       "string" => {:reduce, {List, :to_string, []}},
       "NOT" => {:reduce, {List, :to_string, []}},
       "AND-OR" => {:reduce, {List, :to_string, []}},
+      "compKeyword" => {:reduce, {List, :to_string, []}},
       "subAttr" => {:post_traverse, {:extract_subname, []}},
       "compareOp" => {:post_traverse, {:lc_compareop, []}},
-      "number" => {:post_traverse, {:extract_number, []}},
-      "attrExp" => {:post_traverse, {:clean_attrexp, []}},
-      "FILTER" => {:post_traverse, {:clean_filter, []}}
+      "number" => {:post_traverse, {:extract_decimal, []}}
     },
     ignore: [
-      "quotation-mark"
+      "ws",
+      "quotation-mark",
+      "grouping-start",
+      "grouping-end",
+      "attribute-filter-start",
+      "attribute-filter-end"
     ],
+    # convert values like `{:def, ["value"]}` to `"value"`
+    # (removing the wrapping of the value in a list and a tagged tuple)
     unbox: [
-      # "NOT",
-      # "AND-OR",
       "nameChar",
       "json-char",
       "unescaped",
       "string",
       "digit1-9",
+      "zero",
       "decimal-point",
+      "e",
       "number",
-      # flatten schema uri parts
       "schema-uri-part",
-      "schema-uri-sep"
+      "schema-uri-sep",
+      "FILTER",
+      "scim-rfc-path",
+      "valFilter"
     ],
+    # convert things like `{:def, ["value"]}` to `{:def, "value"}`
+    # (removing the wrapping of the value in a list)
     unwrap: [
       "NOT",
       "AND-OR",
+      "compKeyword",
       "compValue",
       "compareOp",
-      "attrExp",
-      "FILTER",
-      # convert `{:schema_uri, [""]}` to `{:schema_uri, ""}`
       "schema-uri",
-      # convert `{:attrname, ["name"]}` to `{:attrname, "name"}`
       "ATTRNAME",
-      # convert `{:subattr, ["familyName"]}` (result from the `:post_traverse`
-      # on `subAttr`) to `{:subattr, "familyName"}`
       "subAttr"
     ]
 
@@ -58,29 +63,22 @@ defmodule ScimParser do
     {rest, [String.downcase(op)], context}
   end
 
-  # convert `{:number, [minus: '-', int: '1', frac: [{:decimal_point, '.'}, 52]]}` to `{:number, [-1.52]}`
-  defp extract_number(rest, [frac: frac, int: int, minus: '-'], context, _line, _offset) do
-    {rest, [Decimal.new("-#{int}#{frac}")], context}
-  end
+  # convert `{:number, [minus: '-', int: '1', frac: '.52']]}` to `{:number, [-1.52]}`
+  defp extract_decimal(rest, opts, context, _line, _offset) do
+    int = Keyword.get(opts, :int)
+    frac = Keyword.get(opts, :frac)
+    minus = Keyword.get(opts, :minus)
 
-  defp extract_number(rest, [frac: frac, int: int], context, _line, _offset) do
-    {rest, [Decimal.new("#{int}#{frac}")], context}
-  end
+    exp =
+      Keyword.get(opts, :exp)
+      |> case do
+        [?e, {:minus, '-'} | rest] -> [?e, '-' | rest]
+        [?e, {:plus, '+'} | rest] -> [?e, '+' | rest]
+        other -> other
+      end
 
-  defp extract_number(rest, [int: int], context, _line, _offset) do
-    {rest, [Decimal.new("#{int}")], context}
-  end
+    decimal = Decimal.new("#{minus}#{int}#{frac}#{exp}")
 
-  defp clean_attrexp(rest, attrexp, context, _line, _offset) do
-    {rest, [attrexp |> Enum.reject(fn x -> x == " " end) |> Enum.reverse()], context}
-  end
-
-  defp clean_filter(rest, filter, context, _line, _offset) do
-    {rest,
-     [
-       filter
-       |> Enum.reject(fn x -> x in [" ", "(", ")"] end)
-       |> Enum.reverse()
-     ], context}
+    {rest, [decimal], context}
   end
 end
