@@ -26,8 +26,28 @@ valFilter = (attrExp / [NOT SP] "(" valFilter ")") [SP AND-OR SP valFilter]
 attrExp   = (attrPath SP "pr") /
             (attrPath SP compareOp SP compValue)
 
-compValue = false / null / true / number / string
-	  ; rules from JSON (RFC 7159)
+; Custom `compValue`
+;
+; Even though the spec mentions
+;
+; `(meta.resourceType eq User) or (meta.resourceType eq Group)`
+;
+; as a filter expression (https://www.rfc-editor.org/rfc/rfc7644#page-17)
+; that can be used to restrict resource types, it does not fit the original ABNF
+; definition as the matching value (`User` or `Group` in the example)
+; needs to be a valid json string (i.e. quoted)
+;
+; So we adjust the definition of `compValue` slightly to also allow for
+; keywords (unquoted sequences of characters).
+; This allows us to extract the `User` and `Group` from the aforementioned expression
+; for mentioned resource type comparison.
+;
+; original:
+;   compValue = false / null / true / number / string
+;             ; rules from JSON (RFC 7159)
+;
+compValue = false / null / true / number / string / compKeyword
+compKeyword = ALPHA *(nameChar)
 
 ; Custom `NOT` and `AND-OR` definitions for better customization
 ; (to support custom `valFilter` and `FILTER` definitions)
@@ -45,14 +65,19 @@ compareOp = "eq" / "ne" / "co" /
 ; 1. the URI definition is super flexible (`a:::::` is a valid URI)
 ; 2. generated parser is greedy and does not perform backtracking
 ; `uri:a:b:c will be completely matched by `URI` and there will be nothing left for `ATTRNAME`, hence failing the `attrPath`
-; So an adjusted definition is used for `attrPath` (a hack)
+; So an adjusted definition is used for `attrPath`
 ;
 ; originally:
 ;   attrPath  = [URI ":"] ATTRNAME *1subAttr
 ;
-attrPath  = (URI / ATTRNAME) *1subAttr
-	  ; SCIM attribute name
-	  ; URI is SCIM "schema" URI
+; adjusted but not optimal:
+;   attrPath  = (URI / ATTRNAME) *1subAttr
+;	        ; SCIM attribute name
+;	        ; URI is SCIM "schema" URI
+attrPath = [schema-uri] ATTRNAME *1subAttr
+schema-uri = *(1*schema-uri-part schema-uri-sep)
+schema-uri-part = ALPHA / DIGIT / "." / "-" / "_"
+schema-uri-sep = %x3A
 
 ATTRNAME  = ALPHA *(nameChar)
 
