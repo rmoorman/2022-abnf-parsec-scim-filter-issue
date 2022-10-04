@@ -85,6 +85,64 @@ defmodule ScimParserTest do
   end
 
   describe "result of parsing valid filter rule" do
+    @rule ~s|id eq User|
+    test @rule do
+      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
+      assert [scim_filter: [attrexp: [_, _, compvalue: {:compkeyword, "User"}]]] = data
+    end
+
+    @rule ~s|id eq "foo"|
+    test @rule do
+      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
+      assert [scim_filter: [attrexp: [_, _, compvalue: "foo"]]] = data
+    end
+
+    @rule ~s|id eq true|
+    test @rule do
+      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
+      assert [scim_filter: [attrexp: [_, _, compvalue: true]]] = data
+    end
+
+    @rule ~s|id eq false|
+    test @rule do
+      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
+      assert [scim_filter: [attrexp: [_, _, compvalue: false]]] = data
+    end
+
+    @rule ~s|id eq null|
+    test @rule do
+      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
+      assert [scim_filter: [attrexp: [_, _, compvalue: nil]]] = data
+    end
+
+    @rule ~s|id eq 1|
+    test @rule do
+      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
+      value = {:number, [int: '1']}
+      assert [scim_filter: [attrexp: [_, _, compvalue: ^value]]] = data
+    end
+
+    @rule ~s|id eq 1.4|
+    test @rule do
+      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
+      value = {:number, [int: '1', frac: '.4']}
+      assert [scim_filter: [attrexp: [_, _, compvalue: ^value]]] = data
+    end
+
+    @rule ~s|id eq -1.4|
+    test @rule do
+      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
+      value = {:number, [minus: '-', int: '1', frac: '.4']}
+      assert [scim_filter: [attrexp: [_, _, compvalue: ^value]]] = data
+    end
+
+    @rule ~s|id eq -1.4e+10|
+    test @rule do
+      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
+      value = {:number, [minus: '-', int: '1', frac: '.4', exp: [101, {:plus, '+'}, 49, 48]]}
+      assert [scim_filter: [attrexp: [_, _, compvalue: ^value]]] = data
+    end
+
     @rule ~s|userName Eq "john"|
     test @rule do
       expected = [
@@ -94,7 +152,7 @@ defmodule ScimParserTest do
               schema_uri: "",
               attrname: "userName"
             ],
-            compareop: "eq",
+            compareop: "Eq",
             compvalue: "john"
           ]
         ]
@@ -138,34 +196,6 @@ defmodule ScimParserTest do
       ]
 
       assert {:ok, ^expected, "", _, _, _} = parse(:scim_filter, @rule)
-    end
-
-    @rule ~s|id eq 1|
-    test @rule do
-      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
-      decimal = %Decimal{coef: 1, sign: 1, exp: 0}
-      assert [scim_filter: [attrexp: [_, _, compvalue: ^decimal]]] = data
-    end
-
-    @rule ~s|id eq 1.4|
-    test @rule do
-      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
-      decimal = %Decimal{coef: 14, sign: 1, exp: -1}
-      assert [scim_filter: [attrexp: [_, _, compvalue: ^decimal]]] = data
-    end
-
-    @rule ~s|id eq -1.4|
-    test @rule do
-      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
-      decimal = %Decimal{coef: 14, sign: -1, exp: -1}
-      assert [scim_filter: [attrexp: [_, _, compvalue: ^decimal]]] = data
-    end
-
-    @rule ~s|id eq -1.4e+10|
-    test @rule do
-      assert {:ok, data, "", _, _, _} = parse(:scim_filter, @rule)
-      decimal = %Decimal{coef: 14, sign: -1, exp: 9}
-      assert [scim_filter: [attrexp: [_, _, compvalue: ^decimal]]] = data
     end
 
     @rule ~s|not (meta.resourceType eq User) or (meta.resourceType eq Group)|
@@ -288,7 +318,7 @@ defmodule ScimParserTest do
         (bar lt 5 and bar eq 3)
         and (bar eq 2 or bar eq 1.5 or bar eq 1.7)
       )
-      or moi eq 2
+      or qux eq 2
     )
     """
     test @rule do
@@ -298,13 +328,13 @@ defmodule ScimParserTest do
             filter_grouping: [
               attrexp: [
                 attrpath: [schema_uri: "", attrname: "foo"],
-                presentop: ["pr"]
+                presentop: "pr"
               ],
               and_or: "or",
               attrexp: [
                 attrpath: [schema_uri: "", attrname: "foo"],
                 compareop: "eq",
-                compvalue: Decimal.new(1)
+                compvalue: {:number, [int: '1']}
               ]
             ]
           ],
@@ -313,7 +343,7 @@ defmodule ScimParserTest do
             attrexp: [
               attrpath: [schema_uri: "", attrname: "bar"],
               compareop: "gt",
-              compvalue: Decimal.new(1)
+              compvalue: {:number, [int: '1']}
             ],
             and_or: "and",
             filter_grouping: [
@@ -321,13 +351,13 @@ defmodule ScimParserTest do
                 attrexp: [
                   attrpath: [schema_uri: "", attrname: "bar"],
                   compareop: "lt",
-                  compvalue: Decimal.new(5)
+                  compvalue: {:number, [int: '5']}
                 ],
                 and_or: "and",
                 attrexp: [
                   attrpath: [schema_uri: "", attrname: "bar"],
                   compareop: "eq",
-                  compvalue: Decimal.new(3)
+                  compvalue: {:number, [int: '3']}
                 ]
               ],
               and_or: "and",
@@ -335,27 +365,27 @@ defmodule ScimParserTest do
                 attrexp: [
                   attrpath: [schema_uri: "", attrname: "bar"],
                   compareop: "eq",
-                  compvalue: Decimal.new(2)
+                  compvalue: {:number, [int: '2']}
                 ],
                 and_or: "or",
                 attrexp: [
                   attrpath: [schema_uri: "", attrname: "bar"],
                   compareop: "eq",
-                  compvalue: Decimal.from_float(1.5)
+                  compvalue: {:number, [int: '1', frac: '.5']}
                 ],
                 and_or: "or",
                 attrexp: [
                   attrpath: [schema_uri: "", attrname: "bar"],
                   compareop: "eq",
-                  compvalue: Decimal.from_float(1.7)
+                  compvalue: {:number, [int: '1', frac: '.7']}
                 ]
               ]
             ],
             and_or: "or",
             attrexp: [
-              attrpath: [schema_uri: "", attrname: "moi"],
+              attrpath: [schema_uri: "", attrname: "qux"],
               compareop: "eq",
-              compvalue: Decimal.new(2)
+              compvalue: {:number, [int: '2']}
             ]
           ]
         ]
@@ -451,13 +481,13 @@ defmodule ScimParserTest do
           attrexp: [
             attrpath: [schema_uri: "", attrname: "id"],
             compareop: "eq",
-            compvalue: %Decimal{coef: 60, sign: 1, exp: 0}
+            compvalue: {:number, [int: '60']}
           ],
           and_or: "and",
           attrexp: [
             attrpath: [schema_uri: "", attrname: "id"],
             compareop: "eq",
-            compvalue: %Decimal{coef: 1188, sign: 1, exp: 0}
+            compvalue: {:number, [int: '1188']}
           ]
         ]
       ]
